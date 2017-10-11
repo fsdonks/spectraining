@@ -62,5 +62,38 @@
 ;; Write a spec that validates whether a string matches the regex
 ;; #"SKU-[0-9]+" using re-matches and test with some values.
 
-;; Does it generate when you exercise it?
+;; Does it generate when you exercise it? ;;nope!
+(defn matches? [x]
+  (re-matches #"SKU-[0-9]+" x))
 
+;;composite specs
+
+;; Create a spec that accepts any unqualified symbol EXCEPT &.
+;; Does it gen automatically?
+
+(defn not-&? [x]
+  (not (= x '&)))
+(s/def ::not& not-&?)
+;;do better?
+(s/def ::not& (s/and symbol? not-&?))
+
+
+;; Create specs for privileged ports (1-1024) and unprivileged ports
+;; (1025-65536). Create a spec that combines these specs for any
+;; port. Conform values in both ranges and check the result.
+
+(defn between? [v a b]
+  (and (>= v a) (<= v b)))
+
+(s/valid? (s/or  :priv #(between? % 1 1024)  :unpriv #(between? % 1025 65536)) 4)
+
+(map (fn [x] (s/conform
+       (s/or :priv #(between? % 1 1024)
+             :unpriv #(between? % 1025 65536)) x))
+     (range 100))
+
+;;better?
+(s/def ::priv (s/int-in 1 1024))
+(s/def ::unpriv (s/int-in 1025 65536))
+(s/def ::valid-port (s/or :priv   ::priv
+                          :unpriv ::unpriv))
