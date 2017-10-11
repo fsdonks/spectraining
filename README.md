@@ -1,6 +1,6 @@
 # spectraining
-
-A Clojure library designed to ... well, that part is up to you.
+ClojureConj2017
+clojureconj
 
 ## Usage
 
