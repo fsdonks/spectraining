@@ -97,3 +97,36 @@
 (s/def ::unpriv (s/int-in 1025 65536))
 (s/def ::valid-port (s/or :priv   ::priv
                           :unpriv ::unpriv))
+
+
+
+
+;; Given the prior exercise, what if you wished to conform not to a
+;; tagged value but to the original value?
+
+;; spec provides conformers to manipulate the conformed value. s/conform
+;; applies an arbitrary function to its input and returns either the
+;; modified output or :s/invalid. Often conformers are combined with
+;; other predicates inside an s/and.
+
+;; NOTE! Be careful using conformers, particularly with registered specs
+;; - you are making decisions for all consumers of your spec. Modifying
+;; the conformed value throws away information that you may wish to have
+;; at some future point.
+
+;; Use s/conformer to modify ::port to return the original value. Keep in
+;; mind that s/or returns a map entry that works with key and val.
+
+
+;;TBD;;;
+
+
+;;The logic contained in conform can be run in reverse to produce the
+;;original value from a conformed value using s/unform.
+
+;;Run unform on both ::port and ::port-2 - what happens? 
+
+;;TBD;;;;
+
+
+
