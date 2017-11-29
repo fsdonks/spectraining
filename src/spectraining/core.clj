@@ -1,13 +1,19 @@
+;;This is some companion code to the spec
+;;course provided by Alex Miller at the
+;;2017 Clojure Conj.
 (ns spectraining.core
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.gen.alpha :as gen]
             [clojure.spec.test.alpha :as stest]))
 
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (println x "Hello, World!"))
+;;any predicate can be a spec.
+;;so, anything implementing IFn can be a spec.
+;;This includes clojure's data structures as
+;;well as fn/defn and the like.
 
+
+;;spec uses valid? to apply a spec to a value,
+;;kind of like a super predicate.
 
 ;;Given a spec, check to see if it's valid....
 (s/valid? int? 10)        ;; true
@@ -15,10 +21,26 @@
 (s/valid? string? "abc")  ;; true
 (s/valid? #{1 2 3} 3)     ;; true
 
+
+;;conform maps a spec to a value and returns
+;;possibly more information about the datum.
+;;If it conforms via a simple spec, the return
+;;is the input datum; if the spec used has
+;;alternatives, then the tagged [alt v] value
+;;is returned.  This can be used somewhat like
+;;parsing, except with the ns-relative keyword
+;;:clojure.spec.alpha/invalid
+
 ;;tell how value conforms with conform...
 (s/conform int? 10)  ;; 10
+;;jumping ahead, conform can return "tagged"
+;;values.
+(s/conform (s/or :string string? :number number?) "a")
+;;[:string "a"]
 
 ;;exercise specs, i.e. generative testing with random stuff.
+;;spec uses the exercise function to generate  samples for
+;;a spec.
 (s/exercise int?)
 (s/exercise string?)
 
@@ -26,12 +48,8 @@
 (s/conform #{1 2 3} 3)
 (s/exercise #{1 2 3})
 
-
-
 ;;Validate that "abc" is a valid string using spec.
 (s/valid? string? "abc")
-
-
 
 ;;Write a spec that describes the number of pins knocked down in a bowling roll (0-10). Generate some sample rolls.
 (def rolls (s/int-in 0 10))
@@ -66,6 +84,31 @@
 (defn matches? [x]
   (re-matches #"SKU-[0-9]+" x))
 
+(defn token [c]
+  (s/and char?
+         (fn [x] (= c x))))
+(defn literal [c]
+   (eval `(s/cat ~@(flatten
+              (for [ch (seq c)]
+                [(keyword ch) (hash-set ch)])))))
+
+(s/def ::zero-to-nine (s/+ (s/int-in 0 10)))
+(s/def ::chars-zero-to-nine (set (map (comp first str) (range 10))))
+
+;;better version?  Probably not! but it's showing how to build
+;;some parsing functions from what we have. Note the weakness
+;;on relying on chars.  We're basically reconstructing a regex.
+(s/def ::sku-prefix (s/and (s/coll-of char?)
+                           (s/cat :prefix #_(s/cat :s (token \S)
+                                                 :k (token \K)
+                                                 :u (token \U)
+                                                 :- (token \-))
+                                          (literal "SKU-")
+                                  :number (s/+ ::chars-zero-to-nine))))
+
+;;spectraining.core> (s/conform ::sku-prefix (seq "SKU-01"))
+;;{:prefix {:s \S, :k \K, :u \U, :- \-}, :number [\0 \1]}
+
 ;;composite specs
 
 ;; Create a spec that accepts any unqualified symbol EXCEPT &.
@@ -85,7 +128,8 @@
 (defn between? [v a b]
   (and (>= v a) (<= v b)))
 
-(s/valid? (s/or  :priv #(between? % 1 1024)  :unpriv #(between? % 1025 65536)) 4)
+(s/valid? (s/or  :priv   #(between? % 1 1024)
+                 :unpriv #(between? % 1025 65536)) 4)
 
 #_(map (fn [x] (s/conform
        (s/or :priv #(between? % 1 1024)
@@ -93,7 +137,7 @@
      (range 100))
 
 ;;better?
-(s/def ::priv (s/int-in 1 1024))
+(s/def ::priv   (s/int-in 1 1024))
 (s/def ::unpriv (s/int-in 1025 65536))
 (s/def ::valid-port (s/or :priv   ::priv
                           :unpriv ::unpriv))
@@ -178,19 +222,25 @@
 (s/def ::recipe (s/map-of keyword? (s/or :name string? :quantity number? :unit keyword?)))
 ;;approved solution!
 (comment
-(create-ns 'common)
-(alias 'c 'common)
-(s/def ::c/pos-num (s/and number? pos?))
+  ;;Note: the ::alias/keyword syntax is great,
+  ;;except if the ns/alias doesn't yet exist,
+  ;;we get an error from the clojure reader.
 
-(create-ns 'ingredient)
-(alias 'i 'ingredient)
-(s/def ::i/name string?)
-(s/def ::i/quantity :common/pos-num)
-(s/def ::i/unit keyword?)
-(s/def ::i/ingredient (s/keys :req [::i/name ::i/quantity ::i/unit]))
+  ;;for that reason, the following code is
+  ;;commented out fully.
+  ;; (create-ns 'common)
+  ;; (alias 'c 'common)
+  ;; (s/def ::c/pos-num (s/and number? pos?))
 
-(s/conform ::i/ingredient water)
-(s/conform ::i/ingredient butter)
+  ;; (create-ns 'ingredient)
+  ;; (alias 'i 'ingredient)
+  ;; (s/def ::i/name string?)
+  ;; (s/def ::i/quantity :common/pos-num)
+  ;; (s/def ::i/unit keyword?)
+  ;; (s/def ::i/ingredient (s/keys :req [::i/name ::i/quantity ::i/unit]))
+
+  ;; (s/conform ::i/ingredient water)
+  ;; (s/conform ::i/ingredient butter)
 )
 
 ;; Write a spec for a recipe consisting of:
