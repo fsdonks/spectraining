@@ -84,13 +84,17 @@
 (defn matches? [x]
   (re-matches #"SKU-[0-9]+" x))
 
-(defn token [c]
-  (s/and char?
-         (fn [x] (= c x))))
-(defn literal [c]
-   (eval `(s/cat ~@(flatten
-              (for [ch (seq c)]
-                [(keyword ch) (hash-set ch)])))))
+
+;;let's match a string literal...
+
+;;"helloworld"
+;;we want to match the "hello" portion,
+;;and return the rest of the sequence.
+
+(defn tokens [xs]
+  (eval `(s/cat ~@(flatten (for [[idx x] (map-indexed vector xs)]
+                    [(keyword (str idx))
+                     #{x}])))))
 
 (s/def ::zero-to-nine (s/+ (s/int-in 0 10)))
 (s/def ::chars-zero-to-nine (set (map (comp first str) (range 10))))
@@ -98,16 +102,27 @@
 ;;better version?  Probably not! but it's showing how to build
 ;;some parsing functions from what we have. Note the weakness
 ;;on relying on chars.  We're basically reconstructing a regex.
-(s/def ::sku-prefix (s/and (s/coll-of char?)
-                           (s/cat :prefix #_(s/cat :s (token \S)
-                                                 :k (token \K)
-                                                 :u (token \U)
-                                                 :- (token \-))
-                                          (literal "SKU-")
-                                  :number (s/+ ::chars-zero-to-nine))))
+;;advantages: we can exercise it...
+;;disadvantages: we're out of the string domain, into
+;;  seq operations, so performance may be poor...
+(s/def ::sku-tokens
+  (s/and (s/cat :prefix (tokens (seq "SKU-"))
+                :number (s/+ ::chars-zero-to-nine))
+         (s/conformer #(apply str (get % :number)))))
 
-;;spectraining.core> (s/conform ::sku-prefix (seq "SKU-01"))
-;;{:prefix {:s \S, :k \K, :u \U, :- \-}, :number [\0 \1]}
+(s/def ::tokens
+  (s/and
+   (s/or :string  (s/and string? (s/conformer seq))
+         :charseq (s/coll-of char?))
+   (s/conformer val)))
+
+;;we can't exercise this easily, without a custom generator.
+(s/def ::sku
+  (s/and ::tokens 
+         ::sku-tokens))
+
+;;spectraining.core> (s/conform ::sku "SKU-0001")
+;;"0001"
 
 ;;composite specs
 
