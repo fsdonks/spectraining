@@ -84,20 +84,72 @@
 (defn matches? [x]
   (re-matches #"SKU-[0-9]+" x))
 
+;;Begin Digression (advanced concepts)
+;;====================================
+;;In the normal course of training, the previous predicate was
+;;the end-point, since we hadn't learned about sequence specs
+;;and parsing yet.  If we double back and try to make a more
+;;spec friendly variant that doesn't use opaque functions,
+;;but tries to expose structure, we end up with a really
+;;useful exercise into spec's core functionality....
 
-;;let's match a string literal...
+;;First, let's try to parse the structure of an SKU,
+;;like the regex, by construing it as a sequence of
+;;tokens.  Since strings are sequences, they fit
+;;nicely into this parsing scheme.  We can then
+;;leverage spec's parser combinators to get
+;;the structure of a regex, expressed in specs,
+;;which should allow us to exercise said specs...
 
-;;"helloworld"
-;;we want to match the "hello" portion,
-;;and return the rest of the sequence.
-
-(defn tokens [xs]
+;;We can define a spec that matches a sequence
+;;of tokens, like "hello" => '(\h \e \l \l \o),
+;;we could match a sequence of '(\h \e).
+;;To do this with existing spec infrastructure,
+;;we can use the cat combinator, which works
+;;on sequences and combines specs that "consumes"
+;;or otherwise match portions of the sequence in
+;;order.  cat, being a class of specs that provides
+;;"alternatives," requires us to name each
+;;possible alternative with a keyword.  For matching
+;;out sequence of tokens, we can just use indexed
+;;numbers mapped to keywords, and toss out the
+;;resulting keys (or not).  To make this stick,
+;;we need to create a cat expression (using syntax-quote,
+;;or the ` backquote) and construct the body of the cat.
+;;This is abnormal for most operations, but necessary
+;;here.  This has the effect of constructing and
+;;evaluating a cat combinator from our input...
+;;(literal "he") =>
+;;(eval '(clojure.spec.alpha/cat :0 #{\h} :1 #{\e}))
+;;We use a singleton set for each character to
+;;stay spec-friendly (since we can exercise sets) and
+;;since sets act as specs.
+(defn literal [xs]
   (eval `(s/cat ~@(flatten (for [[idx x] (map-indexed vector xs)]
                     [(keyword (str idx))
                      #{x}])))))
+;;we can define a spec that can match either
+;;a string or a sequence of characters, and
+;;conform the input to a sequence of charactes,
+;;or tokens.
+(s/def ::tokens
+  (s/and
+   (s/or :string  (s/and string? (s/conformer seq))
+         :charseq (s/coll-of char?))
+   (s/conformer val)))
 
+;;spec provides specs on sequences and ranges.
 (s/def ::zero-to-nine (s/+ (s/int-in 0 10)))
+;;Operating on characters, we can define a set for
+;;the numbers 0-9 in character land, for matching and
+;;exercising...
 (s/def ::chars-zero-to-nine (set (map (comp first str) (range 10))))
+
+;;Using cat and our previous specs, we can now define
+;;a spec that matches a sequence of characters,
+;;deconstructs the prefix portion of the SKU, and the
+;;numeric portion, and returns the numeric string
+;;during conformance.
 
 ;;better version?  Probably not! but it's showing how to build
 ;;some parsing functions from what we have. Note the weakness
@@ -106,25 +158,47 @@
 ;;disadvantages: we're out of the string domain, into
 ;;  seq operations, so performance may be poor...
 (s/def ::sku-tokens
-  (s/and (s/cat :prefix (tokens (seq "SKU-"))
+  (s/and (s/cat :prefix (literal (seq "SKU-"))
                 :number (s/+ ::chars-zero-to-nine))
          (s/conformer #(apply str (get % :number)))))
 
-(s/def ::tokens
-  (s/and
-   (s/or :string  (s/and string? (s/conformer seq))
-         :charseq (s/coll-of char?))
-   (s/conformer val)))
+;;The final spec for an SKU is simply combining the tokens
+;;spec to ensure we get a sequence of characters, and then
+;;piping that to the sku-tokens spec, to get the numeric
+;;result.
 
-;;we can't exercise this easily, without a custom generator.
+;;we can't exercise this easily, without a custom generator
+;;for strings, but we CAN exercise the sku-tokens spec...
 (s/def ::sku
   (s/and ::tokens 
          ::sku-tokens))
-
 ;;spectraining.core> (s/conform ::sku "SKU-0001")
 ;;"0001"
 
-;;composite specs
+;;spectraining.core> (s/exercise ::sku)
+;;Unhandled clojure.lang.ExceptionInfo
+;;Couldn't satisfy such-that predicate after 100 tries.
+;;{} ...
+
+;; spectraining.core> (s/exercise ::sku-tokens)
+;; ([(\S \K \U \- \3) "3"]
+;;  [(\S \K \U \- \9) "9"]
+;;  [(\S \K \U \- \7) "7"]
+;;  [(\S \K \U \- \1 \8 \9) "189"]
+;;  [(\S \K \U \- \3) "3"]
+;;  [(\S \K \U \- \4 \7 \8) "478"]
+;;  [(\S \K \U \- \8 \3 \5 \7 \0 \5 \4) "8357054"]
+;;  [(\S \K \U \- \4 \8 \8 \4 \2 \8 \7 \0) "48842870"]
+;;  [(\S \K \U \- \9 \5 \6) "956"]
+;;  [](\S \K \U \- \6 \3) "63"])
+
+
+;;End Digression
+;;==============
+
+
+;;Composite Specs
+;;===============
 
 ;; Create a spec that accepts any unqualified symbol EXCEPT &.
 ;; Does it gen automatically?
