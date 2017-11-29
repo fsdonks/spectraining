@@ -4,7 +4,8 @@
 (ns spectraining.core
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.gen.alpha :as gen]
-            [clojure.spec.test.alpha :as stest]))
+            [clojure.spec.test.alpha :as stest]
+            [clojure.string :as str]))
 
 ;;any predicate can be a spec.
 ;;so, anything implementing IFn can be a spec.
@@ -298,17 +299,36 @@
 (s/def ::leaf int?) 
 (s/def ::tree
   (s/or :leaf ::leaf
-        :branch (s/coll-of ::tree :max-count 2)))  
+        :branch (s/coll-of ::tree :max-count 2)))
+
+;; spectraining.core> (use 'clojure.pprint)
+;; nil
+;; spectraining.core> (pprint (s/conform ::tree sd))
+;; [:branch
+;;  [[:branch [[:leaf 1] [:leaf 2]]]
+;;   [:branch [[:leaf 3] [:branch [[:leaf 4] [:leaf 5]]]]]]]
+;; nil
+
 
 ;; Write a spec for a recipe ingredient consisting of the ingredient
 ;; name, a quantity, and unit (a keyword). The following ingredients
 ;; should conform:
 
+;;Side-note: the #:something{:hello 0 :world 1} reader syntax was
+;;added to Clojure (around 1.8?) to support namespace-qualified
+;;keys for maps.  It's a shorthand for
+;;{:something/hello 0 :something/world 1} .
+;;This fits into the paradigm Datomic and spec follow, which
+;;encourages specificity (even at the keyword level) by using
+;;namespace qualified keys.  The reader literal shortens the
+;;burden a bit.  It's like saying: an ingredient-map....vs
+;;a generic map, so that :name cannot be confused with
+;;:ingredient/name .
 
 (def water #:ingredient{:name "water" :quantity 10 :unit :ounce})
 (def butter #:ingredient{:name "butter" :quantity 1/2 :unit :tablespoon})
 
-(s/def ::recipe (s/map-of keyword? (s/or :name string? :quantity number? :unit keyword?)))
+(s/def ::ingredient (s/map-of keyword? (s/or :name string? :quantity number? :unit keyword?)))
 ;;approved solution!
 (comment
   ;;Note: the ::alias/keyword syntax is great,
@@ -351,7 +371,14 @@
     :steps ["Toast two slice of bread in the toaster."
             "Spread butter on toast."]
     :servings 1})
+(s/def ::recipe (s/map-of keyword? (s/or :name string?
+                                         :description string?
+                                         :ingredients (s/coll-of ::ingredient)
+                                         :steps (s/coll-of string?)
+                                         :servings int?)))
 
+;;Multi-spec
+;;==========
 
 ;; Extend the event multi-spec in the slides to add another case for
 ;; events that look like this:
@@ -365,6 +392,9 @@
 
 (defmulti event-type :event/type)
 (s/def :event/event (s/multi-spec event-type :event/type))
+
+;;WIP
+
 
 ;; "Hybrid" maps are mostly k-v containers, but also contain information
 ;; header properties. We can write specs for hybrid maps by creating a
@@ -382,10 +412,12 @@
 ;; `s/map-of` or `s/keys` and instead is a combination of both.
 
 ;; First, write a spec `:game/opts` just for the game options.
-
-
-
-
+(def options #{:game/rule-set
+               :game/dice-count})
+(s/def :game/opts
+  (s/merge (s/keys :req (vec options))
+           (s/map-of options (s/or :rule-set   keyword?
+                                   :dice-count int? ))))
 ;; Next, we want to create a spec that views the map entries as key-value
 ;; tuples. There are two kinds of tuples - "normal" map entries of string
 ;; keys / integer values and option entries that are keyword keys and the
@@ -396,8 +428,11 @@
 ;; 200]`. Write a spec `:game/tuple-option` that matches a tuple like
 ;; `[:game/rule-set :cthulhu]`.
 
+(s/def :game/tuple-kv
+  (s/tuple string? int?))
 
-
+(s/def :game/tuple-option
+  (s/tuple any? any?))
 ;; Now that we have a way to describe tuples, and a way to describe an
 ;; options map, we can put them all together to spec the overall hybrid
 ;; map.
@@ -412,9 +447,10 @@
 ;; map as a collection of either `:game/tuple-kv` or
 ;; `:game/tuple-option`. Then create a spec that merges the collection
 ;; spec with the `:game/opts` spec into a single `:game/scores` spec.
-
-
-
+(s/def :game/entries (s/coll-of (s/or :kv     :game/tuple-kv
+                                      :option :game/tuple-option ) :kind map?
+                                :into {}
+                                ))
 
 ;;Write a regex spec for any number of pairs of strings and numbers.
 
@@ -423,8 +459,6 @@
 (s/def ::numpair (s/cat :string string?  
                      :number number?))
 (s/def ::numpairs (s/* ::numpair))
-
-
 
 ;;Write a regex spec for a line defined by two x y coordinates (ints).
 ;;Example: [0 0, 5 5]
@@ -465,7 +499,9 @@
 (s/conform ::range [5 10])
 (s/conform ::range [0 5/2 1/2])
 
-;; Sometimes it's useful to just create a generator that hard-codes a known value. Given the spec (s/def ::i int?), exercise ::i but override the generator to always return 42.
+;; Sometimes it's useful to just create a generator that hard-codes a known
+;; value. Given the spec (s/def ::i int?), exercise ::i but override the
+;; generator to always return 42.
 
 (s/def ::i int?)
 ;;failed...
@@ -473,7 +509,8 @@
   (gen/fmap (fn [_] 42)
       (s/gen ::i)))
 
-(s/exercise ::i 10 {::i #(gen/return 42)})
+(s/exercise ::i 10
+   {::i #(gen/return 42)})
 
 ;; Extend the last example and exercise ::i with a custom generator that
 ;; returns 1, 2, or 3. Remember that you can produce a generator from any
@@ -489,11 +526,13 @@
    {::i #(s/gen (s/with-gen int? (fn [] (s/gen #{1 2 3}))))})
 
 ;; Given a spec for keywords in the xyz namespace:
-
 (s/def ::kwid (s/and qualified-keyword? #(= (namespace %) "xyz")))
 
 ;; Write a custom generator that creates keyword with the "xyz"
 ;; namespace and alphanumeric names.
+(s/exercise string? 10
+    {string? #(s/gen (s/with-gen string?
+                       (fn [] (str "xyz" (rand-int 1000)))))})
 
 ;; Use gen/fmap to implement the generator, based on
 ;; gen/string-alphanumeric, then supply the generator to the spec with
@@ -501,7 +540,22 @@
 ;; returns the generator!
 
 
+;;Note: I factored out this guy.  We can defin a prefix string
+;;generator and use that in later exercises.  Side-note: lots of
+;;the API for generators relies on thunk'd functions (i.e. no-args).
+(defn prefix-gen [prefix]
+  #(gen/fmap (fn [x] (str prefix x)) (gen/string-alphanumeric))
+  )
 
+(s/def ::xyz
+  (s/with-gen string?
+    (prefix-gen "xyz")))
+
+(s/def ::foo (s/with-gen string?
+               (prefix-gen "foo")))
+
+(s/def ::bar (s/with-gen string?
+               (prefix-gen "bar")))
 
 ;; Let's consider a keyword spec that's even more restricted - namespace
 ;; starts with foo and name starts with bar:
@@ -518,4 +572,31 @@
 ;; generate a valid keyword. One useful pattern is to use s/tuple to
 ;; generate your random "parts", then construct the final result with
 ;; s/fmap. Try it!
+(s/def ::kwid3
+  (s/with-gen ::kwid2
+    #(gen/fmap (fn [[foo bar]]
+                 (keyword foo bar))
+               (s/gen (s/tuple ::foo ::bar)))))
 
+;;recap of useful operations on our cool generated spec
+;;We can explain problems with our input using our spec:
+;; spectraining.core> (s/explain ::kwid3 "howdy")
+;; val: "howdy" fails spec: :spectraining.core/kwid3 predicate: qualified-keyword?
+;; nil
+
+;; Assuming we pass a keyword, now we get more specific 
+;; spectraining.core> (s/explain ::kwid3 :howdy/doody)
+;; val: :howdy/doody fails spec: :spectraining.core/kwid3 predicate: (starts-with? (namespace %) "foo")
+;; nil
+
+;; If we fix the namespace, we get one last explanation
+
+;; spectraining.core> (s/explain ::kwid3 :foo/doody)
+;; val: :foo/doody fails spec: :spectraining.core/kwid3 predicate: (starts-with? (name %) "bar")
+;; nil
+
+;; Leading us to fix the input!
+
+;; spectraining.core> (s/explain ::kwid3 :foo/bar)
+;; Success!
+;; nil
