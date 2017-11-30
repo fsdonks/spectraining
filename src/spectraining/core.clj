@@ -1,3 +1,5 @@
+;; * Let's Start
+
 ;;This is some companion code to the spec
 ;;course provided by Alex Miller at the
 ;;2017 Clojure Conj.
@@ -85,8 +87,8 @@
 (defn matches? [x]
   (re-matches #"SKU-[0-9]+" x))
 
-;;Begin Digression (advanced concepts)
-;;====================================
+;;* Digression (advanced concepts)
+;;
 ;;In the normal course of training, the previous predicate was
 ;;the end-point, since we hadn't learned about sequence specs
 ;;and parsing yet.  If we double back and try to make a more
@@ -173,14 +175,16 @@
 (s/def ::sku
   (s/and ::tokens 
          ::sku-tokens))
+
+;;```
 ;;spectraining.core> (s/conform ::sku "SKU-0001")
 ;;"0001"
-
+;;
 ;;spectraining.core> (s/exercise ::sku)
 ;;Unhandled clojure.lang.ExceptionInfo
 ;;Couldn't satisfy such-that predicate after 100 tries.
 ;;{} ...
-
+;;
 ;; spectraining.core> (s/exercise ::sku-tokens)
 ;; ([(\S \K \U \- \3) "3"]
 ;;  [(\S \K \U \- \9) "9"]
@@ -192,14 +196,11 @@
 ;;  [(\S \K \U \- \4 \8 \8 \4 \2 \8 \7 \0) "48842870"]
 ;;  [(\S \K \U \- \9 \5 \6) "956"]
 ;;  [](\S \K \U \- \6 \3) "63"])
+;;```
 
 
-;;End Digression
-;;==============
-
-
-;;Composite Specs
-;;===============
+;;* Composite Specs
+;;
 
 ;; Create a spec that accepts any unqualified symbol EXCEPT &.
 ;; Does it gen automatically?
@@ -241,7 +242,7 @@
 ;; other predicates inside an s/and.
 
 ;; NOTE! Be careful using conformers, particularly with registered specs
-;; - you are making decisions for all consumers of your spec. Modifying
+;; -- you are making decisions for all consumers of your spec. Modifying
 ;; the conformed value throws away information that you may wish to have
 ;; at some future point.
 
@@ -258,7 +259,7 @@
 ;;The logic contained in conform can be run in reverse to produce the
 ;;original value from a conformed value using s/unform.
 
-;;Run unform on both ::port and ::port-2 - what happens?
+;;Run unform on both ::port and ::port-2 -- what happens?
 (comment 
 (s/unform ::valid-port (s/conform ::valid-port 22))
 (s/unform ::valid-port-2  (s/conform ::valid-port-2 22))
@@ -301,6 +302,7 @@
   (s/or :leaf ::leaf
         :branch (s/coll-of ::tree :max-count 2)))
 
+;;```
 ;; spectraining.core> (use 'clojure.pprint)
 ;; nil
 ;; spectraining.core> (pprint (s/conform ::tree sd))
@@ -308,6 +310,7 @@
 ;;  [[:branch [[:leaf 1] [:leaf 2]]]
 ;;   [:branch [[:leaf 3] [:branch [[:leaf 4] [:leaf 5]]]]]]]
 ;; nil
+;;```
 
 
 ;; Write a spec for a recipe ingredient consisting of the ingredient
@@ -354,11 +357,11 @@
 
 ;; Write a spec for a recipe consisting of:
 
-;;     name
-;;     description
-;;     ingredients - coll of ingredients
-;;     steps - coll of strings
-;;     servings - number of servings
+;;   - name
+;;   - description
+;;   - ingredients -- coll of ingredients
+;;   - steps -- coll of strings
+;;   - servings -- number of servings
 
 ;; Conform the following recipe to verify it works: 
 (def toast
@@ -377,8 +380,8 @@
                                          :steps (s/coll-of string?)
                                          :servings int?)))
 
-;;Multi-spec
-;;==========
+;;* Multi-spec
+;;
 
 ;; Extend the event multi-spec in the slides to add another case for
 ;; events that look like this:
@@ -419,7 +422,7 @@
            (s/map-of options (s/or :rule-set   keyword?
                                    :dice-count int? ))))
 ;; Next, we want to create a spec that views the map entries as key-value
-;; tuples. There are two kinds of tuples - "normal" map entries of string
+;; tuples. There are two kinds of tuples -- "normal" map entries of string
 ;; keys / integer values and option entries that are keyword keys and the
 ;; option value. It's enough for us here to lump all option values
 ;; together under an `any?` predicate for now.
@@ -557,7 +560,7 @@
 (s/def ::bar (s/with-gen string?
                (prefix-gen "bar")))
 
-;; Let's consider a keyword spec that's even more restricted - namespace
+;; Let's consider a keyword spec that's even more restricted -- namespace
 ;; starts with foo and name starts with bar:
 
 (require '[clojure.string :as str])
@@ -580,23 +583,33 @@
 
 ;;recap of useful operations on our cool generated spec
 ;;We can explain problems with our input using our spec:
+
+;;```
 ;; spectraining.core> (s/explain ::kwid3 "howdy")
 ;; val: "howdy" fails spec: :spectraining.core/kwid3 predicate: qualified-keyword?
 ;; nil
+;;```
 
 ;; Assuming we pass a keyword, now we get more specific 
+
+;;```
 ;; spectraining.core> (s/explain ::kwid3 :howdy/doody)
 ;; val: :howdy/doody fails spec: :spectraining.core/kwid3 predicate: (starts-with? (namespace %) "foo")
 ;; nil
+;;```
 
 ;; If we fix the namespace, we get one last explanation
 
+;;```
 ;; spectraining.core> (s/explain ::kwid3 :foo/doody)
 ;; val: :foo/doody fails spec: :spectraining.core/kwid3 predicate: (starts-with? (name %) "bar")
 ;; nil
+;;```
 
 ;; Leading us to fix the input!
 
+;;```
 ;; spectraining.core> (s/explain ::kwid3 :foo/bar)
 ;; Success!
 ;; nil
+;;```
