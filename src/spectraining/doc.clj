@@ -38,8 +38,6 @@
 
 ;;anything between begin-line and \; is valid source
 (def +non-comment+ #"^[^;]+")
-(defn replace-strings [x]
-  (clojure.string/replace  x   #"\".+\"" ":QUOTED"))
 
 ;;Couldn't figure out a regex to ignore inside of
 ;;string literals when checking for the comment

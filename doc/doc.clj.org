@@ -9,6 +9,7 @@ let's do it with spec!
             [clojure.string :as str]))
 #+END_SRC
 
+
 Given a source file, let's break it down
 by lines and parse the sequence of lines into
 a structure of code blocks.
@@ -45,10 +46,6 @@ line beginning with zero or more whitespace
 anything between begin-line and \; is valid source
 #+BEGIN_SRC clojure
 (def +non-comment+ #"^[^;]+")
-#+END_SRC
-#+BEGIN_SRC clojure
-(defn replace-strings [x]
-  (clojure.string/replace  x   #"\".+\"" ":QUOTED"))
 #+END_SRC
 
 Couldn't figure out a regex to ignore inside of
